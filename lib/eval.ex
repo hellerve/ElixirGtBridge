@@ -42,8 +42,16 @@ defmodule Eval do
     {:reply, term, %__MODULE__{state | bindings: new_bindings ++ state.bindings}}
   end
 
+  def encode(val) do
+    %{
+      exclass: elem(Enum.at(IEx.Info.info(val), 0), 1),
+      exid: 1,
+      value: val
+    }
+  end
+
   def notify(obj, id, port) do
-    {:ok, val} = Jexon.to_json(obj)
+    {:ok, val} = Jexon.to_json(encode(obj))
 
     data = %{
       type: "EVAL",
