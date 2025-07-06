@@ -17,7 +17,7 @@ defmodule Examples.EViews do
   #                           Views                          #
   ############################################################
 
-  @spec some_view(t()) :: any()
+  @spec some_view(t(), any()) :: any()
   defview some_view(self = %__MODULE__{}, builder) do
     builder.list()
     |> priority(1)
