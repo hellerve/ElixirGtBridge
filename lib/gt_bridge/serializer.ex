@@ -2,7 +2,11 @@
 defmodule GtBridge.Serializer do
   @spec to_json(data :: any()) :: {:ok, json :: String.t()}
   def to_json(data) do
-    to_json(data, [])
+    %{
+      exclass: elem(Enum.at(IEx.Info.info(data), 1), 1),
+      exid: 1,
+      value: to_json(data, [])
+    }
   end
 
   @spec to_json(data :: any(), opts :: keyword()) :: {:ok, json :: String.t()}
