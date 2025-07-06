@@ -18,8 +18,11 @@ defmodule Examples.EViews do
   ############################################################
 
   @spec some_view(t()) :: any()
-  defview some_view(self = %__MODULE__{}) do
-    self.int
+  defview some_view(self = %__MODULE__{}, builder) do
+    builder.list()
+    |> priority(1)
+    |> title("Int listed")
+    |> items(fn -> [self.int])
   end
 
   ############################################################
