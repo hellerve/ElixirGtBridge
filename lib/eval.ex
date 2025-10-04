@@ -28,6 +28,15 @@ defmodule Eval do
     GenServer.call(pid, {:eval, code, command_id})
   end
 
+  @doc """
+  Remove an object from the registry.
+  Called by GT when a proxy object is garbage collected.
+  """
+  @spec remove(non_neg_integer()) :: :ok
+  def remove(id) do
+    GtBridge.ObjectRegistry.remove(id)
+  end
+
   ############################################################
   #                    Genserver Behavior                    #
   ############################################################
@@ -48,16 +57,62 @@ defmodule Eval do
 
   @spec notify(term(), String.t(), pos_integer()) :: term()
   def notify(obj, id, port) do
-    {:ok, val} = GtBridge.Serializer.to_json(obj)
+    require Logger
+    Logger.info("Notify called: obj=#{inspect(obj)}, id=#{id}, port=#{port}")
+
+    # Register the object and get a unique ID
+    exid = GtBridge.ObjectRegistry.register(obj)
+
+    # Get class info for the object
+    exclass =
+      case IEx.Info.info(obj) do
+        info when is_list(info) ->
+          case Enum.at(info, 1) do
+            {_, class} -> class
+            _ -> true
+          end
+        _ -> true
+      end
+
+    # Convert struct to a JSON-encodable format
+    json_value = struct_to_json_value(obj)
+
+    # The value object with metadata
+    value_object = %{
+      exclass: exclass,
+      exid: exid,  # Use the real registry ID
+      value: json_value
+    }
+
+    # Serialize the value object to a JSON string
+    # GT expects this to be a string that it can parse
+    {:ok, value_json_string} = Jason.encode(value_object)
 
     data = %{
       type: "EVAL",
       id: id,
-      value: val,
+      value: value_json_string,  # JSON string, not a map
       __sync: "_"
     }
 
-    Req.post!("http://localhost:" <> to_string(port) <> "/EVAL", json: data)
+    url = "http://localhost:" <> to_string(port) <> "/EVAL"
+    Logger.info("POSTing to #{url} with data: #{inspect(data)}")
+
+    response = Req.post!(url, json: data)
+    Logger.info("POST response: #{inspect(response)}")
+
     obj
   end
+
+  # Convert a struct to a JSON-encodable value
+  defp struct_to_json_value(%{__struct__: module} = struct) do
+    # Convert struct to a map with string keys
+    struct
+    |> Map.from_struct()
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
+    |> Map.put("__struct__", inspect(module))
+  end
+
+  defp struct_to_json_value(value), do: value
+
 end
