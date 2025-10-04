@@ -60,38 +60,46 @@ defmodule Eval do
     require Logger
     Logger.info("Notify called: obj=#{inspect(obj)}, id=#{id}, port=#{port}")
 
-    # Register the object and get a unique ID
+    # Register the object and get a unique ID (nil for primitives)
     exid = GtBridge.ObjectRegistry.register(obj)
 
-    # Get class info for the object
-    exclass =
-      case IEx.Info.info(obj) do
-        info when is_list(info) ->
-          case Enum.at(info, 1) do
-            {_, class} -> class
+    # If it's a primitive (exid is nil), send it directly without wrapping
+    value_json_string = if exid == nil do
+      # Primitive - send as-is
+      {:ok, json} = Jason.encode(obj)
+      json
+    else
+      # Complex object - wrap with metadata (lazy loading, no value)
+      # Get class info for the object
+      exclass = cond do
+        is_list(obj) -> "List"
+        is_map(obj) and not is_struct(obj) -> "Map"
+        is_tuple(obj) -> "Tuple"
+        true ->
+          case IEx.Info.info(obj) do
+            info when is_list(info) ->
+              case Enum.at(info, 1) do
+                {_, class} -> class
+                _ -> true
+              end
             _ -> true
           end
-        _ -> true
       end
 
-    # Convert struct to a JSON-encodable format
-    json_value = struct_to_json_value(obj)
+      # The value object with metadata (no value field for lazy loading)
+      value_object = %{
+        exclass: exclass,
+        exid: exid
+      }
 
-    # The value object with metadata
-    value_object = %{
-      exclass: exclass,
-      exid: exid,  # Use the real registry ID
-      value: json_value
-    }
-
-    # Serialize the value object to a JSON string
-    # GT expects this to be a string that it can parse
-    {:ok, value_json_string} = Jason.encode(value_object)
+      {:ok, json} = Jason.encode(value_object)
+      json
+    end
 
     data = %{
       type: "EVAL",
       id: id,
-      value: value_json_string,  # JSON string, not a map
+      value: value_json_string,
       __sync: "_"
     }
 
@@ -103,24 +111,5 @@ defmodule Eval do
 
     obj
   end
-
-  # Convert a struct to a JSON-encodable value
-  defp struct_to_json_value(%{__struct__: module} = struct) do
-    # Convert struct to a map with string keys
-    struct
-    |> Map.from_struct()
-    |> Map.new(fn {k, v} -> {to_string(k), v} end)
-    |> Map.put("__struct__", inspect(module))
-  end
-
-  # Handle module definition tuples
-  defp struct_to_json_value({:module, module, _binary, _result}) do
-    %{
-      "__type__" => "module",
-      "name" => inspect(module)
-    }
-  end
-
-  defp struct_to_json_value(value), do: value
 
 end
