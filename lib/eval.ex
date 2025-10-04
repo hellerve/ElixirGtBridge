@@ -113,6 +113,14 @@ defmodule Eval do
     |> Map.put("__struct__", inspect(module))
   end
 
+  # Handle module definition tuples
+  defp struct_to_json_value({:module, module, _binary, _result}) do
+    %{
+      "__type__" => "module",
+      "name" => inspect(module)
+    }
+  end
+
   defp struct_to_json_value(value), do: value
 
 end
