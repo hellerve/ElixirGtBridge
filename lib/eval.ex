@@ -72,17 +72,29 @@ defmodule Eval do
       # Complex object - wrap with metadata (lazy loading, no value)
       # Get class info for the object
       exclass = cond do
-        is_list(obj) -> "List"
-        is_map(obj) and not is_struct(obj) -> "Map"
-        is_tuple(obj) -> "Tuple"
+        is_struct(obj) ->
+          # Get the module name from __struct__ and clean it up
+          obj.__struct__
+          |> to_string()
+          |> String.replace_prefix("Elixir.", "")
+
+        is_list(obj) ->
+          "List"
+
+        is_map(obj) ->
+          "Map"
+
+        is_tuple(obj) ->
+          "Tuple"
+
         true ->
           case IEx.Info.info(obj) do
             info when is_list(info) ->
               case Enum.at(info, 1) do
                 {_, class} -> class
-                _ -> true
+                _ -> "Unknown"
               end
-            _ -> true
+            _ -> "Unknown"
           end
       end
 
